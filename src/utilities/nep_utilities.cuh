@@ -63,10 +63,11 @@ static __device__ void apply_gnn_A_q_theta(
   const int dim,
   int num_neighbors,
   float* fc_ij,
+  float* fcp_ij,
   float* q_theta_i,
   float* q_theta_j,
   float* q_out,
-  float* Fp)
+  float* q_out_p)
 {
   int F = dim; // dimension of q_out, for now dim_out = dim_in.
   for (int nu = 0; nu < F; nu++) {
@@ -78,16 +79,14 @@ static __device__ void apply_gnn_A_q_theta(
     // TODO perhaps normalize weights? Compare Kipf, Welling et al. (2016)
     for (int j = 0; j < num_neighbors; j++) {
       q_out[nu] += fc_ij[j] * q_theta_j[j + nu * num_neighbors];
-      float fcp_ij = 1; // Derivative is given by fcp_ij; TODO prop that thorugh as well
-      // float fcp_ij = fcp_ij[j +  nu * num_neighbors]
-      Fp[j + nu * num_neighbors] += fcp_ij * q_theta_j[j + nu * num_neighbors];
+      q_out_p[j + nu * num_neighbors] += fcp_ij[j] * q_theta_j[j + nu * num_neighbors];
       // TODO add the derivatives dq / dqr rij
     }
 
     float z = q_out[nu]; // activation z
     q_out[nu] = tanh(z); // activation function
     for (int j = 0; j < num_neighbors; j++) {
-      Fp[j + nu * num_neighbors] *= 1 - z * z; // sigma'(z)
+      q_out_p[j + nu * num_neighbors] *= 1 - z * z; // sigma'(z)
     }
   }
 }

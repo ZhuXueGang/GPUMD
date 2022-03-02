@@ -265,6 +265,7 @@ static __global__ void apply_gnn_message_passing(
     float q_theta_i[MAX_DIM] = {0.0f};
     float q_theta_j[MAX_NEIGHBORS * MAX_DIM] = {0.0f}; // maximum size when all atoms are neighbors
     float fc_ij[MAX_NEIGHBORS] = {0.0f};
+    float fcp_ij[MAX_NEIGHBORS] = {0.0f};
     for (int d = 0; d < annmb.dim; ++d) {
       q_theta_i[d] = g_messages[n1 + d * N];
     }
@@ -277,19 +278,18 @@ static __global__ void apply_gnn_message_passing(
       // Compute weight fc_ij
       float r12[3] = {g_x12[index], g_y12[index], g_z12[index]};
       float d12 = sqrt(r12[0] * r12[0] + r12[1] * r12[1] + r12[2] * r12[2]);
-      float fc12;
-      find_fc(paramb.rc_angular, paramb.rcinv_angular, d12, fc12);
+      float fc12, fcp12;
+      find_fc_and_fcp(paramb.rc_angular, paramb.rcinv_angular, d12, fc12, fcp12);
       fc_ij[j] = fc12;
+      fcp_ij[j] = fcp12;
     }
-
-    // apply gnn to propagate and update descriptors
     float q_out[MAX_DIM] = {0.0f};
-    float Fp[MAX_NEIGHBORS * MAX_DIM] = {0.0f}; // forces on atom i from all neighbors j
-    apply_gnn_A_q_theta(annmb.dim, neighbor_number, fc_ij, q_theta_i, q_theta_j, q_out, Fp);
-    // write propagated descriptor to gnn_descriptors
+    float q_out_p[MAX_NEIGHBORS * MAX_DIM] = {0.0f}; // forces on atom i from all neighbors j
+    apply_gnn_A_q_theta(
+      annmb.dim, neighbor_number, fc_ij, fcp_ij, q_theta_i, q_theta_j, q_out, q_out_p);
     for (int d = 0; d < annmb.dim; ++d) {
-      // printf("n1=%d, q_out[%d]=%f\n", n1, d, q_out[d]);
       gnn_descriptors[n1 + d * N] = q_out[d];
+      // TODO save forces in q_out_p
     }
   }
 }
@@ -313,12 +313,9 @@ static __global__ void apply_gnn_compute_messages(
     for (int d = 0; d < annmb.dim; ++d) {
       q[d] = g_descriptors[n1 + d * N];
     }
-    // apply gnn to propagate and update descriptors
     float q_theta[MAX_DIM] = {0.0f};
     apply_gnn_q_theta(annmb.dim, neighbor_number, gnnmb.theta, q, q_theta);
-    // write propagated descriptor to gnn_descriptors
     for (int d = 0; d < annmb.dim; ++d) {
-      // printf("n1=%d, q_out[%d]=%f\n", n1, d, q_out[d]);
       gnn_messages[n1 + d * N] = q_theta[d];
     }
   }

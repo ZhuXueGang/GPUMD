@@ -284,7 +284,8 @@ static __global__ void apply_gnn_message_passing(
 
     // apply gnn to propagate and update descriptors
     float q_out[MAX_DIM] = {0.0f};
-    apply_gnn_A_q_theta(annmb.dim, neighbor_number, fc_ij, q_theta_i, q_theta_j, q_out);
+    float Fp[MAX_NEIGHBORS * MAX_DIM] = {0.0f}; // forces on atom i from all neighbors j
+    apply_gnn_A_q_theta(annmb.dim, neighbor_number, fc_ij, q_theta_i, q_theta_j, q_out, Fp);
     // write propagated descriptor to gnn_descriptors
     for (int d = 0; d < annmb.dim; ++d) {
       // printf("n1=%d, q_out[%d]=%f\n", n1, d, q_out[d]);
@@ -550,6 +551,7 @@ void NEP4::find_force(
     nep_data.NL_angular.data(), nep_data.gnn_descriptors.data());
   CUDA_CHECK_KERNEL
 
+  // The forces for the ANN, d U_i / d q_nl should be the same.
   apply_ann<<<grid_size, block_size>>>(
     dataset.N, paramb, annmb, nep_data.gnn_descriptors.data(), dataset.energy.data(),
     nep_data.Fp.data());
